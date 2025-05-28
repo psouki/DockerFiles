@@ -1,0 +1,43 @@
+version: '3.8'
+services:
+  # Nginx reverse proxy with HTTPS
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:3000:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - web
+    command: >
+      sh -c "apk add --no-cache openssl && mkdir -p /tmp/ssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/ssl/server.key -out /tmp/ssl/server.crt -subj '/CN=localhost' && nginx -g 'daemon off;'"
+  
+  database:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: decidim123
+      POSTGRES_USER: decidim
+      POSTGRES_DB: decidim_production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    
+  web:
+    image: decidim/decidim
+    depends_on:
+      - database
+    expose:
+      - "3000"
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      DATABASE_URL: postgresql://decidim:decidim123@database/decidim_production
+      RAILS_ENV: production
+      SECRET_KEY_BASE: 4f8c7e6d5a9b2c1e8f7a3d9c6b2e5a8d7c4f1e9b3a6c8d2f5e7a9c3b6d4f8e1a7c9d2b5f8e3a6c9d4f7e1a8c6b9d3f5e8a2c7d4f1e9b6a3c8d5f2e7a9c4b6
+    command: >
+      sh -c "
+        bundle exec rake db:create db:migrate &&
+        bundle exec rails server -b 0.0.0.0 -p 3000
+      "
+
+volumes:
+  postgres_data:
