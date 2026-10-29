@@ -1,0 +1,191 @@
+# Plan de migration de .NET 8 vers .NET 10
+
+## Objectif
+
+Migrer l’API Web .NET 8 vers .NET 10 en **20 jours ouvrables**, avec une équipe de trois personnes, tout en préservant le comportement actuel, en protégeant les dix intégrations externes et en évitant toute refonte architecturale.
+
+.NET 8 atteint la fin du soutien le **10 novembre 2026**, tandis que .NET 10 est une version à soutien à long terme (LTS) prise en charge jusqu’au **14 novembre 2028**. [dotnet.microsoft](https://dotnet.microsoft.com/en-us/platform/support/policy)
+
+## Portée
+
+### Inclus
+
+- Mettre à niveau tous les projets de `net8.0` vers `net10.0`
+- Mettre à jour les packages NuGet et résoudre les problèmes de compatibilité
+- Valider ASP.NET Core, EF Core, l’authentification, la sérialisation, la journalisation et l’hébergement
+- Valider les dix intégrations externes
+- Renforcer la sécurité de la configuration des simulacres (« mocks ») dans `appsettings.json`
+- Exécuter les tests de régression, de contrat, de performance et de déploiement
+- Préparer un plan de retour arrière
+
+### Exclus
+
+- Migration vers l’architecture hexagonale
+- Refactorisation DDD
+- Réécriture des classes de domaine anémiques
+- Déplacement des règles d’affaires hors des services de l’API
+- Nouvelles fonctionnalités
+- Corrections de bogues non liées
+- Refonte du schéma de base de données
+
+## Évaluation initiale
+
+Avant de s’engager sur l’échéancier de 20 jours, réaliser un inventaire technique au cours des 1 à 3 premiers jours.
+
+| Mesure | Pourquoi c’est important | Signal d’alerte |
+|---|---|---|
+| Nombre de fichiers `.csproj` | Détermine l’ampleur de la mise à niveau | Plusieurs projets ou bibliothèques partagées |
+| Lignes de code et nombre de services | Indique la complexité et l’étendue des tests | Classes de services très volumineuses |
+| Dépendances NuGet | Source majeure de risque de migration | Packages obsolètes ou non maintenus |
+| Version d’EF Core | Doit être compatible avec .NET 10 | EF Core 6/7 ou fournisseurs personnalisés |
+| Intégrations externes | Zone la plus risquée en raison des dix systèmes connectés | SDK natifs sans prise en charge de .NET 10 |
+| Couverture de tests | Détermine la capacité à détecter les régressions | Tests d’intégration insuffisants ou absents |
+| Modèle de déploiement | Influence l’exécution, les images, CI/CD et le retour arrière | Images Docker personnalisées ou hébergement obsolète |
+| Configuration des simulacres | Peut masquer des défaillances d’intégration réelles | Simulacres contrôlés par des indicateurs dispersés dans appsettings |
+
+Utiliser l’assistant de mise à niveau .NET pour analyser et mettre à niveau les projets, sans compter sur lui pour valider les intégrations externes. 
+
+## Estimation de l’effort
+
+| Volet de travail | Jours-personne estimés | Notes |
+|---|---:|---|
+| Inventaire, branche et ligne de base CI | 2–3 | Établir une version .NET 8 et un déploiement connus comme stables |
+| Mise à niveau des projets et packages | 5–8 | `net10.0`, mises à jour NuGet, erreurs et avertissements du compilateur |
+| Changements cassants d’exécution et d’API | 3–6 | ASP.NET Core, injection de dépendances, hébergement, sérialisation, journalisation |
+| Validation d’EF Core et de la base de données | 3–6 | Compatibilité du fournisseur, migrations, comportement des requêtes |
+| Validation des intégrations | 6–10 | Zone la plus risquée : dix applications externes |
+| Tests de contrat et de régression | 5–8 | Doivent couvrir les contrats réels, pas seulement les simulacres |
+| Performance, sécurité et observabilité | 2–4 | Démarrage, latence, mémoire, authentification, journalisation |
+| Déploiement en préproduction et validation | 3–5 | Peut chevaucher partiellement les autres travaux |
+| Mise en production et imprévus | 2–3 | Déploiement progressif ou bleu/vert privilégié |
+| **Total** | **31–53** | **Environ 10 à 18 jours calendaires avec trois développeurs** |
+
+### Interprétation de l’estimation
+
+- **Réalisable :** 35 à 50 jours-personne, en supposant qu’aucune dépendance critique n’est non prise en charge et qu’il existe au moins des tests d’intégration de base.
+- **À risque :** 50 à 60 jours-personne, si plusieurs packages ou SDK doivent être remplacés.
+- **Non réalisable en 20 jours :** plus de 60 jours-personne, particulièrement si la couverture de tests est faible, si des SDK tiers ne sont pas pris en charge ou s’il n’existe aucun processus de retour arrière fiable.
+
+## Répartition de l’équipe
+
+| Rôle | Responsabilités principales |
+|---|---|
+| Responsable de la migration | Stratégie de branches, compatibilité des packages, corrections de compilation et d’exécution, registre des risques, fusion finale |
+| Développeur intégrations | Inventaire des intégrations, tests de contrat, validation des adaptateurs, configuration des simulacres |
+| Développeur qualité et déploiement | Suite de tests, CI/CD, environnements, observabilité, mise en production et retour arrière |
+
+Éviter que les trois développeurs modifient simultanément les mêmes projets. Répartir le travail par projet et par frontière d’intégration, avec une personne responsable de la branche de mise en production.
+
+## Plan d’exécution sur 20 jours
+
+### Jours 1 à 3 : Ligne de base et analyse
+
+- Créer une branche de mise à niveau protégée.
+- Confirmer que la version .NET 8 actuelle se compile, se déploie et peut être annulée de façon fiable.
+- Exécuter l’analyse avec l’assistant de mise à niveau .NET.
+- Auditer les packages NuGet pour vérifier la compatibilité avec .NET 10.
+- Inventorier les dix intégrations externes.
+- Documenter chaque indicateur de simulacre dans `appsettings.json`.
+- Identifier les packages sans version compatible avec .NET 10.
+
+**Critères de sortie :** ligne de base .NET 8 stable, inventaire complet des dépendances et intégrations, registre initial des risques.
+
+### Jours 4 à 8 : Mise à niveau mécanique
+
+- Modifier `TargetFramework` en `net10.0` dans tous les projets.
+- Mettre à jour les packages Microsoft, EF Core, l’authentification, la sérialisation et l’observabilité.
+- Résoudre les erreurs de compilation, les API obsolètes et les avertissements d’exécution.
+- Exécuter l’application localement avec la configuration de simulacres existante.
+- Ne pas refactoriser la logique d’affaires ni l’architecture.
+
+**Critères de sortie :** la solution se compile et s’exécute localement sous .NET 10; les tests existants réussissent ou les lacunes sont documentées.
+
+### Jours 9 à 14 : Consolidation des intégrations
+
+- Valider chaque intégration externe dans un environnement dédié.
+- Remplacer les simulacres généraux par des contrats enregistrés lorsque c’est possible.
+- Tester l’authentification, les tentatives de reprise, les délais d’attente, la sérialisation, les réponses d’erreur et l’idempotence.
+- Exécuter des tests de performance sommaires.
+- Comparer le temps de démarrage, la latence, l’utilisation mémoire et le comportement des requêtes de base de données avec la ligne de base .NET 8.
+
+**Critères de sortie :** toutes les intégrations sont validées ou les risques résiduels sont explicitement acceptés et documentés.
+
+### Jours 15 à 17 : Certification en préproduction
+
+- Déployer en préproduction avec une configuration semblable à la production.
+- Exécuter des scénarios d’affaires de bout en bout.
+- Valider les dix intégrations.
+- Obtenir l’approbation des propriétaires des applications dépendantes, lorsque possible.
+- Geler le code, sauf pour les défauts critiques liés à la migration.
+
+**Critères de sortie :** certification en préproduction complétée; candidate à la mise en production approuvée.
+
+### Jours 18 à 20 : Mise en production et imprévus
+
+- Déployer selon une stratégie progressive, bleu/vert ou canari, lorsque l’infrastructure le permet.
+- Surveiller les taux d’erreur, la latence, les défaillances de dépendances et les indicateurs d’affaires.
+- Conserver l’artefact de déploiement .NET 8 et le plan de retour arrière.
+- Ne pas inclure de corrections de bogues non liées, de refactorisation ou de nouvelles fonctionnalités dans cette mise en production.
+
+**Critères de sortie :** déploiement en production stable et plan de retour arrière vérifié.
+
+## Renforcement de la configuration des simulacres
+
+Le système actuel de simulacres basé sur `appsettings.json` doit devenir explicite et sûr, sans refondre l’application.
+
+Actions recommandées :
+
+- Remplacer les lectures de configuration dispersées par une classe d’options fortement typée, par exemple `IntegrationOptions`.
+- Sélectionner les implémentations réelles ou simulées par injection de dépendances.
+- Valider la configuration au démarrage.
+- Empêcher l’utilisation des simulacres en production, sauf approbation explicite.
+- Journaliser un avertissement au démarrage lorsqu’un simulacre est activé.
+- Identifier précisément quelle intégration chaque simulacre remplace.
+- Ajouter des tests qui valident les chemins réels et simulés lorsque c’est pratique.
+
+Cela crée une frontière d’intégration claire sans modifier l’architecture globale du système.
+
+## Registre des risques
+
+| Risque | Probabilité | Impact | Mesure d’atténuation |
+|---|---|---|---|
+| SDK tiers non compatible avec .NET 10 | Moyenne | Élevé | Identifier tôt; isoler derrière un adaptateur; conserver un composant .NET 8 seulement si nécessaire |
+| Changements de comportement du fournisseur EF Core ou des migrations | Moyenne | Élevé | Tester les migrations et des requêtes représentatives sur une base semblable à la production |
+| Changements de sérialisation JSON affectant les consommateurs | Moyenne | Élevé | Ajouter des tests de contrat et déployer progressivement |
+| Les simulacres masquent des défauts réels d’intégration | Élevée | Élevé | Valider avec des systèmes réels ou des contrats enregistrés avant la mise en production |
+| Absence de plan de retour arrière testé | Moyenne | Critique | Conserver l’artefact de déploiement précédent et vérifier la procédure de retour arrière |
+| Débordement vers une refactorisation | Élevée | Élevé | Appliquer une règle stricte : aucune refactorisation pendant la migration |
+| Régression de performance | Moyenne | Moyen | Capturer les métriques .NET 8 avant la migration et comparer ensuite |
+| Propriétaire d’intégration indisponible pour la validation | Moyenne | Élevé | Planifier la validation tôt et utiliser les tests de contrat comme solution de repli |
+
+## Critères Go / No-Go
+
+Poursuivre la migration de 20 jours seulement si les conditions suivantes sont réunies au jour 3 :
+
+- Toutes les dépendances critiques prennent en charge .NET 10 ou ont une solution de remplacement viable.
+- L’application .NET 8 actuelle peut être compilée, déployée et annulée de façon fiable.
+- Chaque intégration externe possède au moins un test sommaire ou un contrat enregistré.
+- L’équipe a accès aux environnements de préproduction et aux identifiants d’intégration.
+- Les parties prenantes conviennent qu’aucune refactorisation architecturale ne sera effectuée pendant la migration.
+- Une stratégie de retour arrière existe et a été revue.
+
+Si ces conditions ne sont pas réunies, adopter une approche en deux phases :
+
+1. **Phase 1 :** stabiliser les tests, les contrats d’intégration, les points d’extension des simulacres et la fiabilité du déploiement sous .NET 8.
+2. **Phase 2 :** effectuer la mise à niveau vers .NET 10 une fois le filet de sécurité en place.
+
+## Message recommandé
+
+> « Il ne s’agit pas d’une autre grande initiative de refactorisation. L’objectif est de mettre à niveau la plateforme d’exécution de façon sûre, tout en préservant le comportement actuel et en protégeant toutes les intégrations externes. Nous établirons d’abord une ligne de base fiable, validerons chaque frontière d’intégration et maintiendrons un plan de retour arrière testé. Toute amélioration architecturale future sera progressive et distincte de cette migration. »
+
+## Critères de succès
+
+La migration est réussie lorsque :
+
+- L’application fonctionne sous .NET 10 en production.
+- Les dix intégrations réussissent les scénarios de validation définis.
+- Les contrats d’API existants demeurent compatibles.
+- La performance respecte les tolérances convenues par rapport à .NET 8.
+- Le plan de retour arrière a été testé ou clairement validé.
+- Aucun changement architectural ou logique non lié n’a été introduit.
+- Le système demeure soutenable après la fin du soutien de .NET 8. [dotnet.microsoft](https://dotnet.microsoft.com/en-us/platform/support/policy)
